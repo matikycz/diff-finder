@@ -1,0 +1,22 @@
+{
+  "fileName": "testfile.xlsx",
+  "sheets": {
+    "old": "Old",
+    "new": "New",
+    "triggers": "Triggers",
+    "result": "Result"
+  },
+  "columns": {
+    "typeCol": "Type",
+    "contentCol": "Content",
+    "triggerCol": "Trigger"
+  },
+  "resultColumns": {
+    "type": "Type",
+    "oldContent": "Old content",
+    "newContent": "New content",
+    "trigger": "Trigger",
+    "modified": "Modified",
+    "differences": "Differences"
+  }
+}

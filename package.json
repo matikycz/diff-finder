@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/matikycz/diff-finder#readme",
   "dependencies": {
+    "diff": "^8.0.4",
     "exceljs": "^4.4.0"
   }
 }
