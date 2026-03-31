@@ -66,8 +66,11 @@ async function processExcelFile() {
   const newMap = extractMap(newSheet, config.columns.typeCol, config.columns.contentCol);
   const triggerMap = extractMap(triggersSheet, config.columns.typeCol, config.columns.triggerCol);
 
-  // Union of all types from Old and New
-  const allTypes = [...new Set([...oldMap.keys(), ...newMap.keys()])].sort();
+  // Types ordered by 1st tab (Old), then any extras from 2nd tab (New) in their original order
+  const allTypes = [
+    ...oldMap.keys(),
+    ...[...newMap.keys()].filter((k) => !oldMap.has(k)),
+  ];
 
   // Remove existing Result sheet if present, then add a fresh one
   const existingResult = workbook.getWorksheet(config.sheets.result);
