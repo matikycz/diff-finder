@@ -5,16 +5,56 @@ const config = require('./config.json');
 
 const filePath = path.join(__dirname, config.fileName);
 
+function toPlainString(value) {
+  if (value == null) return '';
+
+  // Primitive
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  // Rich text
+  if (Array.isArray(value.richText)) {
+    return value.richText
+      .map(part => toPlainString(part.text))
+      .join(''); // <-- keep empty join, do NOT add spaces
+  }
+
+  // Wrapped text
+  if (typeof value.text !== 'undefined') {
+    return toPlainString(value.text);
+  }
+
+  // Hyperlink
+  if (value.hyperlink) {
+    return toPlainString(value.text || value.hyperlink);
+  }
+
+  // Formula result
+  if (typeof value.result !== 'undefined') {
+    return toPlainString(value.result);
+  }
+
+  // Date
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return String(value);
+}
+
 // Extract a map of Type -> columnValue from a worksheet given column header names
-function extractMap(worksheet, typeCol, valueCol) {
+function extractMap(worksheet, typeCol, valueCol, filterCol = null) {
   const map = new Map();
   let typeIdx = -1;
   let valueIdx = -1;
+  let filterIdx = -1;
 
   worksheet.getRow(1).eachCell((cell, colNumber) => {
     const header = String(cell.value).trim();
     if (header === typeCol) typeIdx = colNumber;
     if (header === valueCol) valueIdx = colNumber;
+    if (filterCol && header === filterCol) filterIdx = colNumber;
   });
 
   if (typeIdx === -1 || valueIdx === -1) {
@@ -25,8 +65,17 @@ function extractMap(worksheet, typeCol, valueCol) {
     if (rowNumber === 1) return; // skip header
     const type = row.getCell(typeIdx).value;
     const value = row.getCell(valueIdx).value;
+    const filter = filterIdx !== -1 ? row.getCell(filterIdx).value : null;
+
+    if(filterIdx !== -1 && filter !== config.columns.filterValue) {
+      return; // skip rows that don't match filter
+    }
+
     if (type != null) {
-      map.set(String(type).trim(), value != null ? String(value).trim() : '');
+      map.set(String(type).trim(), {
+        original: value,
+        plain: toPlainString(value).trim()
+      });
     }
   });
 
@@ -62,8 +111,8 @@ async function processExcelFile() {
     throw new Error(`Workbook must contain sheets named "${config.sheets.old}", "${config.sheets.new}", and "${config.sheets.triggers}"`);
   }
 
-  const oldMap = extractMap(oldSheet, config.columns.typeCol, config.columns.contentCol);
-  const newMap = extractMap(newSheet, config.columns.typeCol, config.columns.contentCol);
+  const oldMap = extractMap(oldSheet, config.columns.typeCol, config.columns.contentCol, config.columns.filterCol);
+  const newMap = extractMap(newSheet, config.columns.typeCol, config.columns.contentCol, config.columns.filterCol);
   const triggerMap = extractMap(triggersSheet, config.columns.typeCol, config.columns.triggerCol);
 
   // Types ordered by 1st tab (Old), then any extras from 2nd tab (New) in their original order
@@ -86,13 +135,13 @@ async function processExcelFile() {
   headerRow.commit();
 
   for (const type of allTypes) {
-    const oldContent = oldMap.get(type) ?? '';
-    const newContent = newMap.get(type) ?? '';
-    const trigger = triggerMap.get(type) ?? '';
-    const modified = oldContent !== newContent;
-    const differences = modified ? buildDiffSummary(oldContent, newContent) : '';
+    const oldContent = oldMap.get(type) ?? {};
+    const newContent = newMap.get(type) ?? {};
+    const trigger = triggerMap.get(type)?.original ?? '';
+    const modified = oldContent.plain !== newContent.plain;
+    const differences = modified ? buildDiffSummary(oldContent.plain ?? '', newContent.plain ?? '') : '';
 
-    resultSheet.addRow([type, oldContent, newContent, trigger, modified ? 'Yes' : 'No', differences]);
+    resultSheet.addRow([type, oldContent.original, newContent.original, trigger, modified ? 'Yes' : 'No', differences]);
   }
 
   // Auto-fit column widths (approximate)
@@ -104,6 +153,8 @@ async function processExcelFile() {
     });
     col.width = Math.min(maxLen + 2, 80);
   });
+  resultSheet.getColumn(2).alignment = { wrapText: true };
+  resultSheet.getColumn(3).alignment = { wrapText: true };
 
   await workbook.xlsx.writeFile(filePath);
   console.log(`Done. Result tab written to ${filePath}`);

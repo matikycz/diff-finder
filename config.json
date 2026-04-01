@@ -9,7 +9,9 @@
   "columns": {
     "typeCol": "Type",
     "contentCol": "Content",
-    "triggerCol": "Trigger"
+    "triggerCol": "Trigger",
+    "filterCol": "Filter",
+    "filterValue": "Yes"
   },
   "resultColumns": {
     "type": "Type",
